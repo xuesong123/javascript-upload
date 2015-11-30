@@ -1,0 +1,211 @@
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh-CN" xml:lang="zh-CN">
+<head>
+<title>Skin Uploader</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<link rel="stylesheet" type="text/css" href="/resource/css/upload.css"/>
+<script type="text/javascript" src="/resource/js/jquery-1.7.2.min.js"></script>
+<script type="text/javascript" src="/resource/js/jupload.js"></script>
+<script type="text/javascript">
+<!--
+var UploadManager = {
+    add: function(instanceId, file, url) {
+        var div = document.createElement("div");
+        var parent = document.getElementById("imagePanel");
+        div.id = "_file" + file.id;
+        div.className = "item";
+        div.setAttribute("instanceId", instanceId);
+        div.setAttribute("fileId", file.id);
+        div.innerHTML = this.build(instanceId, file, url);
+        parent.appendChild(div);
+    },
+    build: function(instanceId, file, url) {
+        var b = [];
+        var Ajax = FileUploadFactory.export("Ajax");
+        b[b.length] = "<div class=\"box\">";
+ 
+        if(url == null) {
+            b[b.length] = "<div class=\"file\">" + file.name + "</div>";
+        }
+        else {
+            b[b.length] = "<div class=\"file\"><img src=\"" + url + "\"/></div>";
+        }
+
+        b[b.length] = "<div class=\"progress\">";
+        b[b.length] = "    <div class=\"text\"><p>上传：0.0M/" + Ajax.getByteSize(file.size) + "&nbsp;-&nbsp;0%</p><p>速度：0.0M/秒</p><p>用时：00:00</p></div>";
+        b[b.length] = "    <div class=\"bar\"><div class=\"percent\"></div></div>";
+        b[b.length] = "</div>";
+        b[b.length] = "</div>";
+        b[b.length] = "<div class=\"filename\">";
+        b[b.length] = "<a class=\"file\" href=\"javascript:void(0)\" instanceId=\"" + instanceId + "\" fileId=\"" + file.id + "\" onclick=\"UploadManager.upload(this)\">点击上传</a>";
+        b[b.length] = "&nbsp;&nbsp;<a class=\"file\" href=\"javascript:void(0)\" instanceId=\"" + instanceId + "\" fileId=\"" + file.id + "\" onclick=\"UploadManager.cancel(this)\">取消</a>";
+        b[b.length] = "</div>";
+        b[b.length] = "<a class=\"delete\" href=\"javascript:void(0)\" instanceId=\"" + instanceId + "\" fileId=\"" + file.id + "\" onclick=\"UploadManager.remove(this)\"></a>";
+        return b.join("");
+    },
+    upload: function(e) {
+        var instanceId = e.getAttribute("instanceId");
+        var fileId = e.getAttribute("fileId");
+        var fileUpload = FileUploadFactory.getById(instanceId);
+        fileUpload.upload(fileId, "/upload/test2.html", "fileData", null);
+    },
+    cancel: function(e) {
+        var instanceId = e.getAttribute("instanceId");
+        var fileId = e.getAttribute("fileId");
+        var fileUpload = FileUploadFactory.getById(instanceId);
+        fileUpload.abort(fileId);
+    },
+    remove: function(e) {
+        var instanceId = e.getAttribute("instanceId");
+        var fileId = e.getAttribute("fileId");
+        var fileUpload = FileUploadFactory.getById(instanceId);
+
+        if(fileUpload != null) {
+            fileUpload.remove(fileId);
+        }
+
+        var div = e.parentNode;
+        div.parentNode.removeChild(div);
+    }
+};
+
+window.onload = function() {
+    var type = null;
+    var k = window.location.href.indexOf("type=");
+
+    if(k > -1) {
+        type = window.location.href.substring(k + 5);
+    }
+
+    /**
+     * DEBUG: 1, INFO: 2, WARN: 3, ERROR: 4
+     * 设置上传组件全部日志级别为DEBUG
+     */
+    FileUploadFactory.export("LoggerFactory").level = 1;
+
+    var Ajax = FileUploadFactory.export("Ajax");
+    var Stringify = FileUploadFactory.export("Stringify");
+
+    var fileUpload = FileUploadFactory.create({
+        "id": "uploadButton",
+        "accept": "*",
+        "multiple": true,
+        "partSize": 5 * 10485760,
+        "dataType": "json",
+        "swfURL": "/resource/flash/uploader.swf?a=3",
+        "select": function(files) {
+            try {
+                for(var i = 0; i < files.length; i++) {
+                    var file = files[i];
+                    var extension = file.extension;
+                    this.logger.debug("settings.select - file: {id: " + file.id + ", name: " + file.name + "}");
+                    this.logger.debug("settings.select - invoke load(" + file.id + ")");
+                    // this.upload(file.id, "/upload/test2.html", "fileData", {"test1": "a1", "test2": "a2"});
+
+                    /**
+                     * 选择文件之后可以执行两种动作
+                     * 1. 显示预览图
+                     * this.load(file.id);
+                     *
+                     * 2. 立即上传
+                     * this.upload(file.id, "/upload/test1.html", "fileData", {"test1": "a1", "test2": "a2"});
+                     *
+                     * 此处使用先显示预览图的方式
+                     * load成功之后会回调complete函数, complete中再获取dataURL显示图片
+                     */
+                    if("jpg,jpeg,png,bmp,gif,".indexOf(extension) > -1) {
+                        this.load(file.id);
+                    }
+                    else {
+                        UploadManager.add(this.id, file);
+                    }
+                }
+            }
+            catch(e) {
+                this.logger.error(e.name + ": " + e.message);
+            }
+        },
+        "complete": function(file) {
+            this.logger.debug("settings.complete ...");
+
+            if("jpg,jpeg,png,bmp,gif,".indexOf(file.extension) > -1) {
+                try {
+                    var url = this.getDataURL(file.id);
+                    UploadManager.add(this.id, file, url);
+                }
+                catch(e) {
+                    alert(e.name + ": " + e.message);
+                }
+            }
+        },
+        "progress": function(fileId, loaded, total, speed, seconds) {
+            logger.debug("fileId: " + fileId + ", loaded: " + loaded + ", total: " + total);
+            var percent = Math.floor(loaded / total * 100) + "%";
+            var size = Ajax.getByteSize(loaded) + "/" + Ajax.getByteSize(total);
+            var html = [
+                "<p>上传：", size, "&nbsp;-&nbsp;", percent, "</p>",
+                "<p>速度：", speed, "/秒</p>",
+                "<p>用时：", Ajax.getTimes(seconds), "</p>"
+            ];
+
+            jQuery("#_file" + fileId + " div.progress div.text").html(html.join(""));
+            jQuery("#_file" + fileId + " div.progress div.percent").css("width", percent);
+        },
+        "success": function(file, data) {
+            /**
+             * file - 当前上传的文件对象, 包括属性: id, name, extension, size
+             * data - 服务器返回的数据
+             */
+            this.logger.debug("success - file: " + Stringify.json(file) + ", data: " + Stringify.json(data));
+        },
+        "error": function(file) {
+            alert("[DEBUG]: " + "上传失败，请稍后再试！");
+        }
+    }, type);
+
+    /**
+     * 只设置当前对象的日志级别
+     */
+     // fileUpload.logger.level = 1;
+};
+//-->
+</script>
+</head>
+<body style="padding: 20px 20px 0px 20px;">
+<div style="border: 2px dashed #0087f7; padding: 10px 0px 10px 0px; border-radius: 7px;">
+    <div>
+        <button id="uploadButton" style="margin: 6px; width: 100px; height: 40px; border: 1px solid #888888; font-size: 14px;">上传文件</button>
+        <a href="?type=h5">h5</a>
+        <a href="?type=flash">flash</a>
+    </div>
+    <div style="padding-left: 6px; height: 30px; line-height: 30px; background-color: #a5dd3d; font-size: 14px; ">预览</div>
+    <div style="padding: 10px; height: 300px; overflow-y: auto;">
+        <div id="imagePanel" class="outline-view">
+            <!--
+            <div class="item">
+                <div class="box">
+                   <div class="file">[阳光电影www.ygdy8.com].暴力执法.BD.720p.中英双字幕.rmvb</div>
+                   <div class="progress">
+                       <div class="text"><p>上传：0.0M/100M&nbsp;-&nbsp;30%</p><p>速度：/秒</p><p>用时：00:03</p></div>
+                       <div class="bar"><div class="percent"></div></div>
+                   </div>
+                   </div>
+                   <div class="filename">
+                       <a class="file" href="javascript:void(0)">点击上传</a>
+                       <a class="file" href="javascript:void(0)">取消</a>
+                   </div>
+                   <a class="delete" href="javascript:void(0)"></a>
+                <div>
+            </div>
+            -->
+        </div>
+    </div>
+</div>
+<div style="margin: 20px 10px 30px 0px; padding: 20px 0px 0px 0px; border-top: 1px solid #a5dd3d; background-color: #ffffe1;">
+    <p style="padding-left: 8px;">进度条示例</p>
+    <div id="progress" class="progress">
+        <div class="text"><p>上传：1571.5M/1571.5M&nbsp;-&nbsp;100%</p><p>速度：29.1M/秒</p><p>用时：00:59</p></div>
+        <div class="bar"><div class="percent" style="width: 100%"></div></div>
+    </div>
+</div>
+</body>
+</html>
